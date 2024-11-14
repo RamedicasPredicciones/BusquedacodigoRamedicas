@@ -1,64 +1,65 @@
 import pandas as pd
 import re
 
-# Función para cargar la base desde un archivo CSV o Excel
+# Función para cargar el archivo desde Google Drive
 def load_base():
-    # Asegúrate de poner el enlace correcto para tu Google Sheet o base de datos
-    base_url = "ruta/a/tu/archivo.xlsx"
-    base_df = pd.read_excel(base_url, sheet_name="Hoja1")
-    return base_df
-
-# Función para limpiar el texto (eliminar caracteres especiales y números)
-def clean_text(text):
-    text = text.lower()  # Convertir a minúsculas
-    text = re.sub(r'[^\w\s]', '', text)  # Eliminar caracteres especiales
-    return text
-
-# Función para buscar coincidencias en los productos
-def buscar_coincidencias(nombre, base_df):
-    # Limpiar el nombre ingresado
-    nombre_limpio = clean_text(nombre)
-    palabras = nombre_limpio.split()  # Dividir el nombre en palabras
+    # URL de Google Drive para descargar el archivo
+    base_url = "https://docs.google.com/spreadsheets/d/1WV4la88gTl6OUgqQ5UM0IztNBn_k4VrC/export?format=xlsx"
     
-    coincidencias = []
+    try:
+        # Intentamos cargar el archivo Excel desde la URL proporcionada
+        base_df = pd.read_excel(base_url)
+        return base_df
+    except Exception as e:
+        print(f"Error al cargar el archivo: {e}")
+        return None
 
-    # Iterar sobre los productos en la base de datos
-    for _, row in base_df.iterrows():
-        base_name = clean_text(row['nomart'])
+# Función para buscar las palabras clave en el nombre del producto
+def buscar_producto(producto_ingresado, base_df):
+    # Separar las palabras clave del nombre ingresado
+    palabras_ingresadas = producto_ingresado.split()
 
-        # Comprobar que todas las palabras estén en el nombre de la base
-        if all(palabra in base_name for palabra in palabras):
-            coincidencias.append({
-                "Nombre_ingresado": nombre,
-                "Nombre_encontrado": row["nomart"],
-                "Codigo": row["codart"]
-            })
-    
-    return coincidencias
+    # Resultado de coincidencias
+    resultados = []
 
-# Simulación de entrada de productos
-productos_df = pd.DataFrame({
-    'nombre': ["ACETAMINOFEN + METOCARBAMOL 325MG/400MG TABLETAS RECUBIERTAS"]  # Cambia esto con los productos que tienes
-})
+    # Iteramos sobre los productos en la base de datos
+    for index, row in base_df.iterrows():
+        nombre_producto_base = row['Nombre']  # Suponiendo que la columna con el nombre del producto se llama 'Nombre'
+        coincidencias = 0
 
-# Cargar la base de datos desde el archivo
-base_df = load_base()
+        # Comprobar cada palabra ingresada en el nombre del producto de la base de datos
+        for palabra in palabras_ingresadas:
+            if re.search(r'\b' + re.escape(palabra) + r'\b', nombre_producto_base, re.IGNORECASE):
+                coincidencias += 1
 
-# Lista para almacenar los resultados
-resultados = []
+        # Si encontramos todas las palabras en el nombre, lo añadimos a los resultados
+        if coincidencias == len(palabras_ingresadas):
+            resultados.append(row)
 
-# Buscar coincidencias para cada producto ingresado
-for nombre in productos_df['nombre']:
-    coincidencias = buscar_coincidencias(nombre, base_df)
-    if coincidencias:
-        resultados.extend(coincidencias)
+    return resultados
+
+# Función principal
+def main():
+    # Cargar la base de datos
+    base_df = load_base()
+
+    if base_df is not None:
+        # Solicitar al usuario el nombre del producto a buscar
+        producto_ingresado = "ACETAMINOFEN + METOCARBAMOL 325MG/400MG TABLETAS RECUBIERTAS"  # Aquí va el nombre que quieres buscar
+
+        # Buscar el producto
+        productos_encontrados = buscar_producto(producto_ingresado, base_df)
+
+        # Imprimir resultados
+        if productos_encontrados:
+            print("Productos encontrados:")
+            for producto in productos_encontrados:
+                print(producto)
+        else:
+            print("No se encontraron productos que coincidan.")
     else:
-        resultados.append({
-            "Nombre_ingresado": nombre,
-            "Nombre_encontrado": "No encontrado",
-            "Codigo": "No disponible"
-        })
+        print("No se pudo cargar el archivo de la base de datos.")
 
-# Mostrar los resultados
-resultados_df = pd.DataFrame(resultados)
-print(resultados_df)
+# Ejecutar el código
+if __name__ == "__main__":
+    main()
