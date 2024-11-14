@@ -10,10 +10,11 @@ def load_base():
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para limpiar el texto (eliminar caracteres especiales)
+# Función para limpiar el texto (eliminar caracteres especiales y números)
 def clean_text(text):
     text = text.lower()  # Convertir a minúsculas
     text = re.sub(r'[^\w\s]', '', text)  # Eliminar caracteres especiales
+    text = re.sub(r'\d+', '', text)  # Eliminar los números
     return text
 
 # Función para buscar coincidencias de todas las palabras
@@ -57,11 +58,13 @@ if uploaded_file:
             for nombre in productos_df['nombre']:
                 coincidencias_df = buscar_coincidencias(nombre, base_df)
                 if not coincidencias_df.empty:
-                    resultados.append({
-                        "Nombre_ingresado": nombre,
-                        "Nombre_encontrado": coincidencias_df.iloc[0]["nomart"],
-                        "Codigo": coincidencias_df.iloc[0]["codart"]
-                    })
+                    # Guardar todas las coincidencias
+                    for _, row in coincidencias_df.iterrows():
+                        resultados.append({
+                            "Nombre_ingresado": nombre,
+                            "Nombre_encontrado": row["nomart"],
+                            "Codigo": row["codart"]
+                        })
                 else:
                     resultados.append({
                         "Nombre_ingresado": nombre,
@@ -78,5 +81,3 @@ if uploaded_file:
             st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
-
-
