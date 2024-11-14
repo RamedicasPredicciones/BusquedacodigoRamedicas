@@ -25,7 +25,7 @@ def encontrar_similitudes(nombre, base_df):
         if nombre_palabras & base_palabras or porcentaje_similitud > 0.6:
             coincidencias.append({
                 "Nombre_producto_base": base_nombre,
-                "Codigo": row['codigo'],  # Usamos 'codigo' como columna de código
+                "Codigo": row['codart'],  # Usamos 'codart' como columna de código
                 "Similitud": porcentaje_similitud
             })
 
@@ -48,8 +48,8 @@ if uploaded_file:
         # Cargar la base de datos desde Google Sheets
         base_df = load_base()
 
-        # Verificar que la base también tenga la columna 'nomart' y 'codigo'
-        if 'nomart' in base_df.columns and 'codigo' in base_df.columns:
+        # Verificar que la base también tenga la columna 'nomart' y 'codart'
+        if 'nomart' in base_df.columns and 'codart' in base_df.columns:
             # Lista para almacenar resultados
             resultados = []
 
@@ -92,6 +92,6 @@ if uploaded_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         else:
-            st.error("La base de datos no contiene las columnas 'nomart' y/o 'codigo'.")
+            st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
