@@ -1,60 +1,43 @@
-import streamlit as st
 import pandas as pd
-from fuzzywuzzy import fuzz
-from fuzzywuzzy import process
+import gspread
+from fuzzywuzzy import fuzz, process
+from oauth2client.service_account import ServiceAccountCredentials
 
-# Función para buscar el producto en la base de datos
-def encontrar_similitudes(nombre_producto, base_df):
-    # Dividir el nombre ingresado en palabras individuales
-    palabras_ingresadas = set(nombre_producto.lower().split())
-    
-    # Lista para almacenar las coincidencias encontradas
-    coincidencias = []
-    
-    # Comparar cada producto en la base con las palabras del nombre ingresado
-    for idx, row in base_df.iterrows():
-        base_nombre = row['nomart'].lower()
-        base_palabras = set(base_nombre.split())
-        
-        # Buscar la similitud basada en las palabras
-        palabras_comunes = palabras_ingresadas & base_palabras
-        
-        if palabras_comunes:
-            # Se usa fuzz.token_sort_ratio para permitir la comparación a pesar del orden de las palabras
-            similitud = fuzz.token_sort_ratio(nombre_producto.lower(), base_nombre)
-            coincidencias.append({
-                "Producto Base": row['nomart'],
-                "Código": row['codart'],
-                "Similitud": similitud
-            })
-    
-    # Si se encuentran coincidencias, ordenarlas por similitud y devolver el resultado
-    if coincidencias:
-        return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
-    else:
-        return None
+# Configurar el acceso a Google Sheets
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name('ruta_a_tu_credencial.json', scope)
+client = gspread.authorize(creds)
 
-# Cargar el archivo de Google Sheets como base de datos
-@st.cache_data
-def cargar_base_de_datos():
-    url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=csv"
-    base_df = pd.read_csv(url)
-    return base_df
+# Cargar la base de datos de Google Sheets
+sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/edit?usp=sharing")
+worksheet = sheet.get_worksheet(0)  # Selecciona la primera hoja
+data_base = pd.DataFrame(worksheet.get_all_records())
 
-# Subir el archivo con los nombres de los productos
-st.title("Buscar Código de Producto")
-nombre = st.text_input("Ingresa el nombre del producto", "")
+# Subir el archivo con productos a buscar
+archivo_usuario = pd.read_csv('archivo_usuario.csv')  # Asegúrate de que tiene columnas 'nombre' y 'Embalaje'
 
-# Cargar la base de datos
-base_df = cargar_base_de_datos()
+# Función para buscar coincidencias de nombres con tolerancia a diferencias en palabras y orden
+def buscar_producto(nombre_producto, data_base):
+    mejores_coincidencias = []
+    for _, row in data_base.iterrows():
+        base_producto = row['nombre_producto_base']
+        score = fuzz.token_set_ratio(nombre_producto, base_producto)
+        if score > 70:  # Ajusta el umbral de coincidencia si es necesario
+            mejores_coincidencias.append((row['codigo'], base_producto, score))
+    mejores_coincidencias = sorted(mejores_coincidencias, key=lambda x: x[2], reverse=True)
+    return mejores_coincidencias[0] if mejores_coincidencias else (None, None, None)
 
-# Realizar la búsqueda si el nombre del producto está ingresado
-if nombre:
-    similitudes_df = encontrar_similitudes(nombre, base_df)
-    
-    if similitudes_df is not None and not similitudes_df.empty:
-        # Mostrar las coincidencias
-        st.write("Se encontraron las siguientes coincidencias:")
-        st.dataframe(similitudes_df)
-    else:
-        st.write("No se encontraron coincidencias para el producto ingresado.")
+# Buscar coincidencias para cada producto en el archivo del usuario
+resultados = []
+for _, row in archivo_usuario.iterrows():
+    nombre = row['nombre']
+    embalaje = row['Embalaje']
+    codigo, nombre_base, score = buscar_producto(nombre, data_base)
+    resultados.append({'nombre': nombre, 'Embalaje': embalaje, 'codigo_encontrado': codigo, 'nombre_base': nombre_base, 'similaridad': score})
+
+# Crear un DataFrame con los resultados
+df_resultados = pd.DataFrame(resultados)
+
+# Guardar los resultados
+df_resultados.to_csv('resultados_busqueda.csv', index=False)
+print("Búsqueda completada. Los resultados se guardaron en 'resultados_busqueda.csv'.")
