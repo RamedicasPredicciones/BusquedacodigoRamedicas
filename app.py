@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from fuzzywuzzy import fuzz
-from fuzzywuzzy import process  # Para ayudar con la comparación avanzada
+import re  # Para limpiar caracteres especiales
 
 # Función para cargar la base desde Google Sheets
 def load_base():
@@ -11,13 +11,49 @@ def load_base():
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
+# Función para limpiar y normalizar texto
+def limpiar_texto(texto):
+    # Convertir a minúsculas y remover caracteres especiales
+    texto = texto.lower()
+    texto = re.sub(r'[^\w\s]', '', texto)  # Eliminar todo excepto letras y espacios
+    palabras = texto.split()  # Dividir en palabras
+    return palabras
+
+# Función para comparar las palabras ignorando el orden
+def comparar_palabras(nombre, nombre_base):
+    # Limpiar y obtener las listas de palabras
+    palabras_nombre = set(limpiar_texto(nombre))
+    palabras_nombre_base = set(limpiar_texto(nombre_base))
+
+    # Calcular el porcentaje de palabras en común (intersección)
+    interseccion = palabras_nombre.intersection(palabras_nombre_base)
+    similitud = len(interseccion) / max(len(palabras_nombre), len(palabras_nombre_base)) * 100
+    return similitud
+
 # Función para encontrar la mejor coincidencia de nombre en la base
 def encontrar_similitud(nombre, base_df):
-    # Buscar la mejor coincidencia en la columna 'nomart'
-    mejor_coincidencia = process.extractOne(nombre, base_df['nomart'], scorer=fuzz.token_sort_ratio)
-    if mejor_coincidencia and mejor_coincidencia[1] > 60:  # Umbral de similitud (ajustable)
-        codigo = base_df.loc[base_df['nomart'] == mejor_coincidencia[0], 'codart'].values[0]
-        return mejor_coincidencia[0], codigo, mejor_coincidencia[1]
+    coincidencias = []
+
+    # Buscar en cada fila de la base
+    for _, row in base_df.iterrows():
+        nombre_base = row['nomart']
+        codigo = row['codart']
+
+        # Comparar palabra por palabra
+        similitud = comparar_palabras(nombre, nombre_base)
+
+        # Guardar coincidencias que superen el umbral
+        if similitud > 60:  # Ajusta el umbral según necesidad
+            coincidencias.append({
+                "Nombre_producto_base": nombre_base,
+                "Codigo": codigo,
+                "Similitud": similitud
+            })
+
+    # Ordenar las coincidencias por similitud y devolver la mejor
+    if coincidencias:
+        mejor_coincidencia = max(coincidencias, key=lambda x: x['Similitud'])
+        return mejor_coincidencia["Nombre_producto_base"], mejor_coincidencia["Codigo"], mejor_coincidencia["Similitud"]
     else:
         return "No encontrado", "No disponible", 0
 
