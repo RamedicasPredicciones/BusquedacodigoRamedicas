@@ -29,7 +29,7 @@ def buscar_palabras_clave(nombre, base_df):
         # Limpiar el nombre de la base de datos
         base_nombre_limpio = limpiar_texto(base_nombre)
 
-        # Verificar si todas las palabras clave están presentes en el nombre de la base
+        # Comprobar si todas las palabras clave están en el nombre de la base de datos
         if all(palabra in base_nombre_limpio for palabra in palabras_clave):
             coincidencias.append({
                 "Nombre_producto_base": base_nombre,
