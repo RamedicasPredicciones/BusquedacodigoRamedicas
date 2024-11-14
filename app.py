@@ -15,7 +15,7 @@ def limpiar_texto(texto):
     texto_limpio = re.sub(r'[^\w\s]', '', texto.lower())  # Elimina caracteres especiales
     return texto_limpio
 
-# Función para extraer las palabras claves y buscar coincidencias
+# Función para buscar palabras clave en el nombre del producto
 def buscar_palabras_clave(nombre, base_df):
     # Limpiar y dividir el nombre de la entrada
     palabras_clave = limpiar_texto(nombre).split()
