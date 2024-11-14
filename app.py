@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from fuzzywuzzy import fuzz
 import re  # Para limpiar caracteres especiales
 
 # Función para cargar la base desde Google Sheets
