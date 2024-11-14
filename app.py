@@ -9,6 +9,8 @@ def load_base():
     try:
         # Intentamos cargar el archivo Excel desde la URL proporcionada
         base_df = pd.read_excel(base_url)
+        # Imprimir las columnas disponibles para inspección
+        print(base_df.columns)  # Esto mostrará las columnas del archivo
         return base_df
     except Exception as e:
         print(f"Error al cargar el archivo: {e}")
@@ -24,7 +26,8 @@ def buscar_producto(producto_ingresado, base_df):
 
     # Iteramos sobre los productos en la base de datos
     for index, row in base_df.iterrows():
-        nombre_producto_base = row['Nombre']  # Suponiendo que la columna con el nombre del producto se llama 'Nombre'
+        # Ajusta el nombre de la columna aquí si es necesario
+        nombre_producto_base = row['Producto']  # Cambiar 'Producto' según la columna correcta
         coincidencias = 0
 
         # Comprobar cada palabra ingresada en el nombre del producto de la base de datos
