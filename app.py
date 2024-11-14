@@ -24,12 +24,21 @@ def buscar_coincidencias(nombre, base_df):
     palabras = nombre_limpio.split()  # Dividir el nombre en palabras
     
     # Inicializar la lista de coincidencias
-    coincidencias = base_df
-    
-    # Filtrar por cada palabra en el nombre
-    for palabra in palabras:
-        coincidencias = coincidencias[coincidencias['nomart'].str.contains(palabra, case=False, na=False)]
-    
+    coincidencias = []
+
+    # Filtrar la base para encontrar los productos que contienen todas las palabras
+    for _, row in base_df.iterrows():
+        # Limpiar el nombre en la base
+        base_name = clean_text(row['nomart'])
+
+        # Comprobar que todas las palabras estén presentes en el nombre de la base
+        if all(palabra in base_name for palabra in palabras):
+            coincidencias.append({
+                "Nombre_ingresado": nombre,
+                "Nombre_encontrado": row["nomart"],
+                "Codigo": row["codart"]
+            })
+
     return coincidencias
 
 # Streamlit UI
@@ -56,15 +65,9 @@ if uploaded_file:
 
             # Iterar sobre los nombres de productos y buscar coincidencias
             for nombre in productos_df['nombre']:
-                coincidencias_df = buscar_coincidencias(nombre, base_df)
-                if not coincidencias_df.empty:
-                    # Guardar todas las coincidencias
-                    for _, row in coincidencias_df.iterrows():
-                        resultados.append({
-                            "Nombre_ingresado": nombre,
-                            "Nombre_encontrado": row["nomart"],
-                            "Codigo": row["codart"]
-                        })
+                coincidencias = buscar_coincidencias(nombre, base_df)
+                if coincidencias:
+                    resultados.extend(coincidencias)
                 else:
                     resultados.append({
                         "Nombre_ingresado": nombre,
@@ -81,3 +84,4 @@ if uploaded_file:
             st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
+
