@@ -14,14 +14,15 @@ def load_base():
 
 # Función para normalizar nombres eliminando caracteres especiales y convirtiendo a minúsculas
 def normalizar_nombre(nombre):
-    nombre = re.sub(r'[^\w\s]', '', nombre)  # Elimina caracteres especiales excepto letras y números
+    nombre = re.sub(r'[^\w\s]', ' ', nombre)  # Elimina caracteres especiales excepto letras y números
     return nombre.lower()
 
-# Función para verificar si todas las palabras están presentes en un nombre de la base
+# Función para verificar si todas las palabras están presentes en un nombre de la base, sin importar el orden
 def comparar_palabras(nombre, nombre_base):
     nombre_palabras = set(normalizar_nombre(nombre).split())
     nombre_base_palabras = set(normalizar_nombre(nombre_base).split())
-    return nombre_palabras.issubset(nombre_base_palabras) or nombre_base_palabras.issubset(nombre_palabras)
+    # Comparamos si todas las palabras de nombre están en el nombre_base
+    return nombre_palabras.issubset(nombre_base_palabras)
 
 # Función para buscar coincidencias
 def encontrar_similitudes(nombre, base_df):
