@@ -1,44 +1,31 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 import re
 
 # Función para cargar la base desde Google Sheets
 def load_base():
+    # Cambia el enlace por el que corresponda a tu Google Sheets
     base_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx"
     base_df = pd.read_excel(base_url, sheet_name="Hoja1")
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para limpiar los nombres y eliminar caracteres especiales
+# Función para limpiar el texto (eliminar caracteres especiales)
 def clean_text(text):
-    # Eliminar caracteres especiales y convertir a minúsculas
-    text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)  # Elimina caracteres como +, /, ()...
+    text = text.lower()  # Convertir a minúsculas
+    text = re.sub(r'[^\w\s]', '', text)  # Eliminar caracteres especiales
     return text
 
-# Función para buscar coincidencias
-def encontrar_similitudes(nombre, base_df):
-    # Limpiar el nombre del producto
+# Función para buscar coincidencias con la primera palabra
+def buscar_coincidencia(nombre, base_df):
+    # Limpiar el nombre ingresado
     nombre_limpio = clean_text(nombre)
-    palabras_buscar = nombre_limpio.split()
-
-    coincidencias = []
-
-    for _, row in base_df.iterrows():
-        base_nombre_limpio = clean_text(row['nomart'])
-        
-        # Verificar si todas las palabras del producto ingresado están en el nombre de la base
-        if all(palabra in base_nombre_limpio for palabra in palabras_buscar):
-            coincidencias.append({
-                "Nombre_producto_base": row['nomart'],
-                "Codigo": row['codart']
-            })
-
-    if coincidencias:
-        return pd.DataFrame(coincidencias)
-    else:
-        return pd.DataFrame(columns=["Nombre_producto_base", "Codigo"])
+    primera_palabra = nombre_limpio.split()[0]  # Tomamos solo la primera palabra
+    
+    # Buscar coincidencias en la base de datos
+    coincidencias = base_df[base_df['nomart'].str.contains(primera_palabra, case=False, na=False)]
+    
+    return coincidencias
 
 # Streamlit UI
 st.title('Buscador de Código de Productos')
@@ -64,12 +51,12 @@ if uploaded_file:
 
             # Iterar sobre los nombres de productos y buscar coincidencias
             for nombre in productos_df['nombre']:
-                coincidencias_df = encontrar_similitudes(nombre, base_df)
+                coincidencias_df = buscar_coincidencia(nombre, base_df)
                 if not coincidencias_df.empty:
                     resultados.append({
                         "Nombre_ingresado": nombre,
-                        "Nombre_encontrado": coincidencias_df.iloc[0]["Nombre_producto_base"],
-                        "Codigo": coincidencias_df.iloc[0]["Codigo"]
+                        "Nombre_encontrado": coincidencias_df.iloc[0]["nomart"],
+                        "Codigo": coincidencias_df.iloc[0]["codart"]
                     })
                 else:
                     resultados.append({
@@ -83,21 +70,8 @@ if uploaded_file:
             st.write("Resultados de la búsqueda:")
             st.dataframe(resultados_df)
 
-            # Botón para descargar los resultados como archivo Excel
-            def generar_excel(df):
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Resultados')
-                output.seek(0)
-                return output
-
-            st.download_button(
-                label="Descargar resultados como Excel",
-                data=generar_excel(resultados_df),
-                file_name="resultados_busqueda_productos.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
         else:
             st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
+
