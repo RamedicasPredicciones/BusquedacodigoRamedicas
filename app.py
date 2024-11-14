@@ -1,79 +1,93 @@
 import streamlit as st
 import pandas as pd
 from difflib import SequenceMatcher
+from io import BytesIO
 
-# Cargar inventario desde Google Sheets
-def load_inventory_file():
-    inventario_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx&sheet=Hoja1"
-    inventario_df = pd.read_excel(inventario_url)
-    inventario_df.columns = inventario_df.columns.str.lower().str.strip()  # Normalizar columnas
-    return inventario_df
+# Función para cargar la base desde Google Sheets
+def load_base():
+    base_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx"
+    base_df = pd.read_excel(base_url, sheet_name="Hoja1")
+    base_df.columns = base_df.columns.str.lower().str.strip()
+    return base_df
 
-# Función para comparar nombres de productos
-def find_best_match(product_name, inventory_df):
-    best_match = None
-    highest_similarity = 0
+# Función para buscar coincidencias parciales
+def encontrar_similitudes(nombre, base_df):
+    nombre_palabras = set(nombre.lower().split())
+    coincidencias = []
 
-    # Iterar por cada nombre en el inventario para buscar la mejor coincidencia
-    for idx, row in inventory_df.iterrows():
-        inventory_name = row['nombre']
+    for _, row in base_df.iterrows():
+        base_nombre = row['nombre'].lower()
+        base_palabras = set(base_nombre.split())
+        # Calcula la similitud
+        porcentaje_similitud = SequenceMatcher(None, nombre, base_nombre).ratio()
         
-        # Calcular similitud entre palabras
-        similarity = SequenceMatcher(None, sorted(product_name.lower().split()), sorted(inventory_name.lower().split())).ratio()
+        # Condición: palabras coinciden o porcentaje de similitud es alto
+        if nombre_palabras & base_palabras or porcentaje_similitud > 0.6:
+            coincidencias.append({
+                "Nombre_producto_base": base_nombre,
+                "Codigo": row['codigo'],
+                "Similitud": porcentaje_similitud
+            })
 
-        if similarity > highest_similarity:
-            highest_similarity = similarity
-            best_match = row  # Guardar la mejor coincidencia encontrada
-
-    return best_match if highest_similarity > 0.5 else None  # Retornar solo coincidencias significativas
+    return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
 
 # Streamlit UI
-st.title('Buscador de Código de Producto')
+st.title('Buscador de Código de Productos')
 
-uploaded_file = st.file_uploader("Sube un archivo con 'nombre' del producto y 'embalaje'", type="xlsx")
+# Subir archivo con nombres de productos
+uploaded_file = st.file_uploader("Sube un archivo con los nombres de productos", type=["xlsx", "csv"])
 
 if uploaded_file:
-    # Leer archivo subido
-    user_df = pd.read_excel(uploaded_file)
-    user_df.columns = user_df.columns.str.lower().str.strip()  # Normalizar columnas
-    
-    if 'nombre' in user_df.columns:
-        inventario_df = load_inventory_file()
-        
+    if uploaded_file.name.endswith('xlsx'):
+        productos_df = pd.read_excel(uploaded_file)
+    else:
+        productos_df = pd.read_csv(uploaded_file)
+
+    # Verificar que el archivo tenga la columna 'nombre'
+    if 'nombre' in productos_df.columns:
+        # Cargar la base de datos desde Google Sheets
+        base_df = load_base()
+
+        # Lista para almacenar resultados
         resultados = []
-        for _, row in user_df.iterrows():
-            product_name = row['nombre']
-            embalaje = row.get('embalaje', None)  # Verificar si existe la columna embalaje
-            
-            best_match = find_best_match(product_name, inventario_df)
-            if best_match is not None:
-                result_row = {
-                    'nombre': product_name,
-                    'embalaje': embalaje,
-                    'codigo_encontrado': best_match['codigo'] if 'codigo' in best_match else None,
-                    'nombre_encontrado': best_match['nombre']
-                }
-                resultados.append(result_row)
+
+        # Iterar sobre los nombres de productos y buscar similitudes
+        for nombre in productos_df['nombre']:
+            similitudes_df = encontrar_similitudes(nombre, base_df)
+            if not similitudes_df.empty:
+                mejor_coincidencia = similitudes_df.iloc[0]  # Selecciona la mejor coincidencia
+                resultados.append({
+                    "Nombre_ingresado": nombre,
+                    "Nombre_encontrado": mejor_coincidencia["Nombre_producto_base"],
+                    "Codigo": mejor_coincidencia["Codigo"],
+                    "Similitud": mejor_coincidencia["Similitud"]
+                })
             else:
-                resultados.append({'nombre': product_name, 'embalaje': embalaje, 'codigo_encontrado': 'No encontrado'})
-        
-        # Mostrar resultados
+                resultados.append({
+                    "Nombre_ingresado": nombre,
+                    "Nombre_encontrado": "No encontrado",
+                    "Codigo": "No disponible",
+                    "Similitud": 0
+                })
+
+        # Convertir resultados a DataFrame y mostrar en la aplicación
         resultados_df = pd.DataFrame(resultados)
         st.write("Resultados de la búsqueda:")
         st.dataframe(resultados_df)
-        
-        # Descargar archivo de resultados
-        def to_excel(df):
+
+        # Botón para descargar los resultados como archivo Excel
+        def generar_excel(df):
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Resultados')
-            return output.getvalue()
+            output.seek(0)
+            return output
 
         st.download_button(
-            label="Descargar resultados en Excel",
-            data=to_excel(resultados_df),
-            file_name='resultados_busqueda.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            label="Descargar resultados como Excel",
+            data=generar_excel(resultados_df),
+            file_name="resultados_busqueda_productos.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.error("El archivo subido debe contener la columna 'nombre'.")
+        st.error("El archivo subido no contiene la columna 'nombre'.")
