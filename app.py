@@ -29,7 +29,11 @@ def encontrar_similitudes(nombre, base_df):
                 "Similitud": porcentaje_similitud
             })
 
-    return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
+    # Asegurarse de que las coincidencias tienen una columna "Similitud"
+    if coincidencias:
+        return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
+    else:
+        return pd.DataFrame(columns=["Nombre_producto_base", "Codigo", "Similitud"])
 
 # Streamlit UI
 st.title('Buscador de Código de Productos')
