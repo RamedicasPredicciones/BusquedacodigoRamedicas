@@ -84,4 +84,3 @@ if uploaded_file:
             st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
-
