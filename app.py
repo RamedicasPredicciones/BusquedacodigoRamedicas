@@ -1,63 +1,72 @@
 import streamlit as st
 import pandas as pd
-import requests
-import re
 from io import BytesIO
+import re
 
 # Función para cargar la base desde Google Sheets
 def load_base():
     base_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx"
-    response = requests.get(base_url)
-    base_df = pd.read_excel(BytesIO(response.content), sheet_name="Hoja1")
-    base_df.columns = base_df.columns.str.lower().str.strip()
+    base_df = pd.read_excel(base_url, sheet_name="Hoja1")
+    base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para normalizar nombres eliminando caracteres especiales y convirtiendo a minúsculas
-def normalizar_nombre(nombre):
-    nombre = re.sub(r'[^\w\s]', ' ', nombre)  # Elimina caracteres especiales excepto letras y números
-    return nombre.lower()
-
-# Función para verificar si todas las palabras están presentes en un nombre de la base, sin importar el orden
-def comparar_palabras(nombre, nombre_base):
-    nombre_palabras = set(normalizar_nombre(nombre).split())
-    nombre_base_palabras = set(normalizar_nombre(nombre_base).split())
-    # Comparamos si todas las palabras de nombre están en el nombre_base
-    return nombre_palabras.issubset(nombre_base_palabras)
+# Función para extraer las palabras clave (ignora caracteres especiales)
+def extraer_palabras_clave(texto):
+    # Elimina caracteres especiales y divide en palabras
+    texto_limpio = re.sub(r'[^\w\s]', '', texto.lower())  # Elimina caracteres especiales
+    return set(texto_limpio.split())
 
 # Función para buscar coincidencias
 def encontrar_similitudes(nombre, base_df):
     coincidencias = []
 
+    # Extraemos las palabras clave del nombre ingresado
+    palabras_clave_nombre = extraer_palabras_clave(nombre)
+
+    # Iterar sobre las filas de la base de datos
     for _, row in base_df.iterrows():
         base_nombre = row['nomart']
-        if comparar_palabras(nombre, base_nombre):
+
+        # Extraemos las palabras clave del nombre de la base de datos
+        palabras_clave_base = extraer_palabras_clave(base_nombre)
+
+        # Verificamos si todas las palabras clave del nombre están presentes en la base
+        if palabras_clave_nombre.issubset(palabras_clave_base):
             coincidencias.append({
                 "Nombre_producto_base": base_nombre,
                 "Codigo": row['codart']
             })
 
-    if coincidencias:
-        return pd.DataFrame(coincidencias)
-    else:
-        return pd.DataFrame(columns=["Nombre_producto_base", "Codigo"])
+    # Si hay coincidencias, las retornamos
+    return pd.DataFrame(coincidencias)
 
-# Interfaz de Streamlit
+# Streamlit UI
 st.title('Buscador de Código de Productos')
 
+# Subir archivo con nombres de productos
 uploaded_file = st.file_uploader("Sube un archivo con los nombres de productos", type=["xlsx", "csv"])
 
 if uploaded_file:
-    productos_df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
+    if uploaded_file.name.endswith('xlsx'):
+        productos_df = pd.read_excel(uploaded_file)
+    else:
+        productos_df = pd.read_csv(uploaded_file)
 
+    # Verificar que el archivo tenga la columna 'nombre'
     if 'nombre' in productos_df.columns:
+        # Cargar la base de datos desde Google Sheets
         base_df = load_base()
 
+        # Verificar que la base también tenga la columna 'nomart' y 'codart'
         if 'nomart' in base_df.columns and 'codart' in base_df.columns:
+            # Lista para almacenar resultados
             resultados = []
+
+            # Iterar sobre los nombres de productos y buscar similitudes
             for nombre in productos_df['nombre']:
                 similitudes_df = encontrar_similitudes(nombre, base_df)
                 if not similitudes_df.empty:
-                    mejor_coincidencia = similitudes_df.iloc[0]
+                    mejor_coincidencia = similitudes_df.iloc[0]  # Selecciona la mejor coincidencia
                     resultados.append({
                         "Nombre_ingresado": nombre,
                         "Nombre_encontrado": mejor_coincidencia["Nombre_producto_base"],
@@ -70,11 +79,12 @@ if uploaded_file:
                         "Codigo": "No disponible"
                     })
 
+            # Convertir resultados a DataFrame y mostrar en la aplicación
             resultados_df = pd.DataFrame(resultados)
             st.write("Resultados de la búsqueda:")
             st.dataframe(resultados_df)
 
-            # Descargar resultados como Excel
+            # Botón para descargar los resultados como archivo Excel
             def generar_excel(df):
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
