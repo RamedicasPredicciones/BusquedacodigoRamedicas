@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from difflib import SequenceMatcher
 from io import BytesIO
 
 # Función para cargar la base desde Google Sheets
@@ -10,26 +9,28 @@ def load_base():
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para buscar coincidencias parciales
+# Función para buscar coincidencias parciales basadas en palabras
 def encontrar_similitudes(nombre, base_df):
     nombre_palabras = set(nombre.lower().split())
     coincidencias = []
 
     for _, row in base_df.iterrows():
         base_nombre = row['nomart'].lower()  # Usamos 'nomart' en minúsculas
-        base_palabras = set(base_nombre.split())
-        # Calcula la similitud
-        porcentaje_similitud = SequenceMatcher(None, nombre, base_nombre).ratio()
-        
-        # Condición: palabras coinciden o porcentaje de similitud es alto
-        if nombre_palabras & base_palabras or porcentaje_similitud > 0.6:
+        base_palabras = set(base_nombre.split())  # Dividimos el nombre en palabras
+
+        # Compara las palabras coincidentes
+        palabras_comunes = nombre_palabras & base_palabras  # Intersección de palabras
+        porcentaje_similitud = len(palabras_comunes) / len(nombre_palabras)  # Similitud basada en las palabras comunes
+
+        # Solo agregar coincidencias si hay alguna palabra común
+        if len(palabras_comunes) > 0:
             coincidencias.append({
                 "Nombre_producto_base": base_nombre,
                 "Codigo": row['codart'],  # Usamos 'codart' como columna de código
                 "Similitud": porcentaje_similitud
             })
 
-    # Asegurarse de que las coincidencias tienen una columna "Similitud"
+    # Si no hay coincidencias, retornamos un DataFrame vacío
     if coincidencias:
         return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
     else:
