@@ -1,7 +1,7 @@
-import pandas as pd
-import re
 import streamlit as st
+import pandas as pd
 from io import BytesIO
+import re
 
 # Función para cargar la base desde Google Sheets
 def load_base():
@@ -10,33 +10,35 @@ def load_base():
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para limpiar el texto: elimina caracteres especiales y lo convierte a minúsculas
-def limpiar_texto(texto):
-    texto_limpio = re.sub(r'[^\w\s]', '', texto.lower())  # Elimina caracteres especiales
-    return texto_limpio
+# Función para limpiar los nombres y eliminar caracteres especiales
+def clean_text(text):
+    # Eliminar caracteres especiales y convertir a minúsculas
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)  # Elimina caracteres como +, /, ()...
+    return text
 
-# Función para buscar palabras clave en el nombre del producto
-def buscar_palabras_clave(nombre, base_df):
-    # Limpiar y dividir el nombre de la entrada
-    palabras_clave = limpiar_texto(nombre).split()
+# Función para buscar coincidencias
+def encontrar_similitudes(nombre, base_df):
+    # Limpiar el nombre del producto
+    nombre_limpio = clean_text(nombre)
+    palabras_buscar = nombre_limpio.split()
 
     coincidencias = []
 
-    # Iterar sobre las filas de la base de datos
     for _, row in base_df.iterrows():
-        base_nombre = row['nomart']
-
-        # Limpiar el nombre de la base de datos
-        base_nombre_limpio = limpiar_texto(base_nombre)
-
-        # Comprobar si todas las palabras clave están en el nombre de la base de datos
-        if all(palabra in base_nombre_limpio for palabra in palabras_clave):
+        base_nombre_limpio = clean_text(row['nomart'])
+        
+        # Verificar si todas las palabras del producto ingresado están en el nombre de la base
+        if all(palabra in base_nombre_limpio for palabra in palabras_buscar):
             coincidencias.append({
-                "Nombre_producto_base": base_nombre,
+                "Nombre_producto_base": row['nomart'],
                 "Codigo": row['codart']
             })
 
-    return pd.DataFrame(coincidencias)
+    if coincidencias:
+        return pd.DataFrame(coincidencias)
+    else:
+        return pd.DataFrame(columns=["Nombre_producto_base", "Codigo"])
 
 # Streamlit UI
 st.title('Buscador de Código de Productos')
@@ -62,13 +64,12 @@ if uploaded_file:
 
             # Iterar sobre los nombres de productos y buscar coincidencias
             for nombre in productos_df['nombre']:
-                similitudes_df = buscar_palabras_clave(nombre, base_df)
-                if not similitudes_df.empty:
-                    mejor_coincidencia = similitudes_df.iloc[0]  # Selecciona la mejor coincidencia
+                coincidencias_df = encontrar_similitudes(nombre, base_df)
+                if not coincidencias_df.empty:
                     resultados.append({
                         "Nombre_ingresado": nombre,
-                        "Nombre_encontrado": mejor_coincidencia["Nombre_producto_base"],
-                        "Codigo": mejor_coincidencia["Codigo"]
+                        "Nombre_encontrado": coincidencias_df.iloc[0]["Nombre_producto_base"],
+                        "Codigo": coincidencias_df.iloc[0]["Codigo"]
                     })
                 else:
                     resultados.append({
