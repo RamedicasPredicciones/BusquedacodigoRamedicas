@@ -16,14 +16,18 @@ def clean_text(text):
     text = re.sub(r'[^\w\s]', '', text)  # Eliminar caracteres especiales
     return text
 
-# Función para buscar coincidencias con la primera palabra
-def buscar_coincidencia(nombre, base_df):
+# Función para buscar coincidencias de todas las palabras
+def buscar_coincidencias(nombre, base_df):
     # Limpiar el nombre ingresado
     nombre_limpio = clean_text(nombre)
-    primera_palabra = nombre_limpio.split()[0]  # Tomamos solo la primera palabra
+    palabras = nombre_limpio.split()  # Dividir el nombre en palabras
     
-    # Buscar coincidencias en la base de datos
-    coincidencias = base_df[base_df['nomart'].str.contains(primera_palabra, case=False, na=False)]
+    # Inicializar la lista de coincidencias
+    coincidencias = base_df
+    
+    # Filtrar por cada palabra en el nombre
+    for palabra in palabras:
+        coincidencias = coincidencias[coincidencias['nomart'].str.contains(palabra, case=False, na=False)]
     
     return coincidencias
 
@@ -51,7 +55,7 @@ if uploaded_file:
 
             # Iterar sobre los nombres de productos y buscar coincidencias
             for nombre in productos_df['nombre']:
-                coincidencias_df = buscar_coincidencia(nombre, base_df)
+                coincidencias_df = buscar_coincidencias(nombre, base_df)
                 if not coincidencias_df.empty:
                     resultados.append({
                         "Nombre_ingresado": nombre,
@@ -74,4 +78,5 @@ if uploaded_file:
             st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
     else:
         st.error("El archivo subido no contiene la columna 'nombre'.")
+
 
