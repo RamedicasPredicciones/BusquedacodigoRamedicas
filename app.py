@@ -1,43 +1,98 @@
+import streamlit as st
 import pandas as pd
-import gspread
-from fuzzywuzzy import fuzz, process
-from oauth2client.service_account import ServiceAccountCredentials
+from io import BytesIO
+from fuzzywuzzy import fuzz
+from collections import Counter
 
-# Configurar el acceso a Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name('ruta_a_tu_credencial.json', scope)
-client = gspread.authorize(creds)
+# Función para cargar la base desde Google Sheets
+def load_base():
+    base_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx"
+    base_df = pd.read_excel(base_url, sheet_name="Hoja1", engine='openpyxl')
+    base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
+    return base_df
 
-# Cargar la base de datos de Google Sheets
-sheet = client.open_by_url("https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/edit?usp=sharing")
-worksheet = sheet.get_worksheet(0)  # Selecciona la primera hoja
-data_base = pd.DataFrame(worksheet.get_all_records())
+# Función para comparar listas de palabras (sin importar el orden)
+def comparar_palabras(nombre, nombre_base):
+    nombre_palabras = set(nombre.lower().split())
+    nombre_base_palabras = set(nombre_base.lower().split())
+    interseccion = nombre_palabras.intersection(nombre_base_palabras)
+    similitud = len(interseccion) / max(len(nombre_palabras), len(nombre_base_palabras)) * 100
+    return similitud
 
-# Subir el archivo con productos a buscar
-archivo_usuario = pd.read_csv('archivo_usuario.csv')  # Asegúrate de que tiene columnas 'nombre' y 'Embalaje'
+# Función para buscar coincidencias
+def encontrar_similitudes(nombre, base_df):
+    coincidencias = []
+    for _, row in base_df.iterrows():
+        base_nombre = row['nomart']
+        similitud = comparar_palabras(nombre, base_nombre)
+        if similitud > 60:  # Ajustar el umbral según necesidad
+            coincidencias.append({
+                "Nombre_producto_base": base_nombre,
+                "Codigo": row['codart'],
+                "Similitud": similitud
+            })
+    return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False) if coincidencias else pd.DataFrame(columns=["Nombre_producto_base", "Codigo", "Similitud"])
 
-# Función para buscar coincidencias de nombres con tolerancia a diferencias en palabras y orden
-def buscar_producto(nombre_producto, data_base):
-    mejores_coincidencias = []
-    for _, row in data_base.iterrows():
-        base_producto = row['nombre_producto_base']
-        score = fuzz.token_set_ratio(nombre_producto, base_producto)
-        if score > 70:  # Ajusta el umbral de coincidencia si es necesario
-            mejores_coincidencias.append((row['codigo'], base_producto, score))
-    mejores_coincidencias = sorted(mejores_coincidencias, key=lambda x: x[2], reverse=True)
-    return mejores_coincidencias[0] if mejores_coincidencias else (None, None, None)
+# Streamlit UI
+st.title('Buscador de Código de Productos')
 
-# Buscar coincidencias para cada producto en el archivo del usuario
-resultados = []
-for _, row in archivo_usuario.iterrows():
-    nombre = row['nombre']
-    embalaje = row['Embalaje']
-    codigo, nombre_base, score = buscar_producto(nombre, data_base)
-    resultados.append({'nombre': nombre, 'Embalaje': embalaje, 'codigo_encontrado': codigo, 'nombre_base': nombre_base, 'similaridad': score})
+# Subir archivo con nombres de productos
+uploaded_file = st.file_uploader("Sube un archivo con los nombres de productos", type=["xlsx", "csv"])
 
-# Crear un DataFrame con los resultados
-df_resultados = pd.DataFrame(resultados)
+if uploaded_file:
+    # Cargar datos del archivo subido
+    try:
+        if uploaded_file.name.endswith('xlsx'):
+            productos_df = pd.read_excel(uploaded_file, engine='openpyxl')
+        else:
+            productos_df = pd.read_csv(uploaded_file)
+        
+        # Verificar la columna 'nombre' en el archivo subido
+        if 'nombre' in productos_df.columns:
+            base_df = load_base()  # Cargar base de datos desde Google Sheets
+            if 'nomart' in base_df.columns and 'codart' in base_df.columns:
+                resultados = []
+                for nombre in productos_df['nombre']:
+                    similitudes_df = encontrar_similitudes(nombre, base_df)
+                    if not similitudes_df.empty:
+                        mejor_coincidencia = similitudes_df.iloc[0]
+                        resultados.append({
+                            "Nombre_ingresado": nombre,
+                            "Nombre_encontrado": mejor_coincidencia["Nombre_producto_base"],
+                            "Codigo": mejor_coincidencia["Codigo"],
+                            "Similitud": mejor_coincidencia["Similitud"]
+                        })
+                    else:
+                        resultados.append({
+                            "Nombre_ingresado": nombre,
+                            "Nombre_encontrado": "No encontrado",
+                            "Codigo": "No disponible",
+                            "Similitud": 0
+                        })
+                
+                # Mostrar los resultados en un DataFrame
+                resultados_df = pd.DataFrame(resultados)
+                st.write("Resultados de la búsqueda:")
+                st.dataframe(resultados_df)
+                
+                # Botón para descargar resultados como Excel
+                def generar_excel(df):
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Resultados')
+                    output.seek(0)
+                    return output
+                
+                st.download_button(
+                    label="Descargar resultados como Excel",
+                    data=generar_excel(resultados_df),
+                    file_name="resultados_busqueda_productos.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.error("La base de datos no contiene las columnas 'nomart' y/o 'codart'.")
+        else:
+            st.error("El archivo subido no contiene la columna 'nombre'.")
+    except Exception as e:
+        st.error(f"Error al procesar el archivo: {e}")
 
-# Guardar los resultados
-df_resultados.to_csv('resultados_busqueda.csv', index=False)
-print("Búsqueda completada. Los resultados se guardaron en 'resultados_busqueda.csv'.")
