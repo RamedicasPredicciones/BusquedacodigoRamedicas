@@ -1,12 +1,15 @@
 import streamlit as st
 import pandas as pd
 import re
+import requests
 from io import BytesIO
 
-# Función para cargar la base desde Google Sheets
+# Función para cargar la base desde Google Sheets usando requests
 def load_base():
     base_url = "https://docs.google.com/spreadsheets/d/1Y9SgliayP_J5Vi2SdtZmGxKWwf1iY7ma/export?format=xlsx"
-    base_df = pd.read_excel(base_url, sheet_name="Hoja1")
+    response = requests.get(base_url)
+    response.raise_for_status()  # Asegura que no haya errores en la descarga
+    base_df = pd.read_excel(BytesIO(response.content), sheet_name="Hoja1")
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
