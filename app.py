@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+from fuzzywuzzy import fuzz
+from collections import Counter
 
 # Función para cargar la base desde Google Sheets
 def load_base():
@@ -9,28 +11,37 @@ def load_base():
     base_df.columns = base_df.columns.str.lower().str.strip()  # Asegura que las columnas estén en minúsculas y sin espacios
     return base_df
 
-# Función para buscar coincidencias parciales basadas en palabras
-def encontrar_similitudes(nombre, base_df):
+# Función para comparar listas de palabras (sin importar el orden)
+def comparar_palabras(nombre, nombre_base):
+    # Convertimos ambos nombres a minúsculas y los dividimos en palabras
     nombre_palabras = set(nombre.lower().split())
+    nombre_base_palabras = set(nombre_base.lower().split())
+    
+    # Comparamos las palabras en los dos conjuntos (calculamos cuántas palabras coinciden)
+    interseccion = nombre_palabras.intersection(nombre_base_palabras)
+    similitud = len(interseccion) / max(len(nombre_palabras), len(nombre_base_palabras)) * 100
+    
+    return similitud
+
+# Función para buscar coincidencias
+def encontrar_similitudes(nombre, base_df):
     coincidencias = []
 
     for _, row in base_df.iterrows():
-        base_nombre = row['nomart'].lower()  # Usamos 'nomart' en minúsculas
-        base_palabras = set(base_nombre.split())  # Dividimos el nombre en palabras
+        base_nombre = row['nomart']
 
-        # Compara las palabras coincidentes
-        palabras_comunes = nombre_palabras & base_palabras  # Intersección de palabras
-        porcentaje_similitud = len(palabras_comunes) / len(nombre_palabras)  # Similitud basada en las palabras comunes
+        # Calculamos la similitud entre los nombres
+        similitud = comparar_palabras(nombre, base_nombre)
 
-        # Solo agregar coincidencias si hay alguna palabra común
-        if len(palabras_comunes) > 0:
+        # Solo agregamos si la similitud es mayor al umbral
+        if similitud > 60:  # Puedes ajustar este umbral según lo necesites
             coincidencias.append({
                 "Nombre_producto_base": base_nombre,
-                "Codigo": row['codart'],  # Usamos 'codart' como columna de código
-                "Similitud": porcentaje_similitud
+                "Codigo": row['codart'],
+                "Similitud": similitud
             })
 
-    # Si no hay coincidencias, retornamos un DataFrame vacío
+    # Si hay coincidencias, las retornamos ordenadas por similitud
     if coincidencias:
         return pd.DataFrame(coincidencias).sort_values(by="Similitud", ascending=False)
     else:
